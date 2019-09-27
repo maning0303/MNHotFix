@@ -1,0 +1,65 @@
+apply plugin: 'com.android.application'
+apply plugin: com.maning.hotfix.plugin.HotFixPlugin
+
+patch{
+    debugOn false
+    applicationName "com.maning.hotfixdemo.DemoApplication"
+}
+
+android {
+    compileSdkVersion 28
+    buildToolsVersion "28.0.3"
+    defaultConfig {
+        applicationId "com.maning.hotfixdemo"
+        minSdkVersion 16
+        targetSdkVersion 28
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.1.0'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+    implementation project(path: ':hotfix')
+}
+
+
+////解析build.gradle完成后再执行内部代码
+//afterEvaluate({
+//    android.getApplicationVariants() all {
+//        variant ->
+//            println(variant.getName() + ">>>>>")
+//            //debug/release
+//            String variantName = variant.getName()
+//            //首字母大写
+//            String capitalizeName = variantName.capitalize()
+//
+//            //把class打包成dex任务
+//            Task dexTask = project.getTasks().findByName("transformClassesWithDexBuilderFor" + capitalizeName)
+//
+//            //打包之前执行插桩
+//            dexTask.doFirst {
+//                Set<File> files = dexTask.getInputs().getFiles().getFiles();
+//                for (File file : files) {
+//                    println(">>>>>" + file.getAbsolutePath())
+//                }
+//            }
+//
+//    }
+//})

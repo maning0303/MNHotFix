@@ -1,0 +1,18 @@
+apply plugin: 'java-library'
+
+tasks.withType(JavaCompile) { options.encoding = "UTF-8" }
+
+repositories {
+    google()
+    jcenter()
+}
+
+dependencies {
+    implementation localGroovy()
+    implementation gradleApi()
+    implementation 'com.android.tools.build:gradle:3.4.2'
+    implementation 'com.google.code.gson:gson:2.8.5'
+}
+
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"

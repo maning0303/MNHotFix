@@ -1,0 +1,1 @@
+include ':app', ':hotfix', ':hotfix_hack', ':buildSrc'
