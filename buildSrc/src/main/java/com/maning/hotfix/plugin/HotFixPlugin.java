@@ -4,6 +4,9 @@ package com.maning.hotfix.plugin;
 import com.android.build.gradle.AppExtension;
 import com.android.build.gradle.AppPlugin;
 import com.android.build.gradle.api.ApplicationVariant;
+import com.android.build.gradle.internal.pipeline.TransformTask;
+import com.android.build.gradle.internal.transforms.ProGuardTransform;
+import com.android.utils.FileUtils;
 
 import org.apache.commons.compress.utils.IOUtils;
 import org.gradle.api.Action;
@@ -11,13 +14,17 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.tasks.TaskOutputs;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -76,34 +83,109 @@ public class HotFixPlugin implements Plugin<Project> {
         String variantName = variant.getName();
         //首字母大写
         String capitalizeName = Utils.capitalize(variantName);
-        //把class打包成dex任务
-        Task dexTask = project.getTasks().findByName("transformClassesWithDexBuilderFor" + capitalizeName);
-        //打包之前执行插桩
-        dexTask.doFirst(new Action<Task>() {
-            @Override
-            public void execute(Task task) {
-                project.getLogger().error(">>>>>>dexTask.doFirst start>>>>>>");
-                Set<File> files = dexTask.getInputs().getFiles().getFiles();
-                for (File file : files) {
-                    project.getLogger().error(">>>>>>file:" + file.getAbsolutePath());
-                    //用户配置的application，实际上可以解析manifest自动获取，但是java实现太麻烦了，干脆让用户自己配置
-                    String applicationName = patchExtension.applicationName;
-                    //windows下 目录输出是  xx\xx\  ,linux下是  /xx/xx ,把 . 替换成平台相关的斜杠
-                    applicationName = applicationName.replaceAll("\\.", Matcher.quoteReplacement(File.separator));
-                    String filePath = file.getAbsolutePath();
-                    //插桩，防止类被打上标签
-                    if (filePath.endsWith(".jar")) {
-                        processJar(applicationName, file);
-                    } else if (filePath.endsWith(".class")) {
-                        processClass(applicationName, variant.getDirName(), file);
+
+
+        //热修复的输出目录
+        File outputDir;
+        //如果没有指名输出目录，默认输出到 build/patch/debug(release) 下
+        if (!Utils.isEmpty(patchExtension.output)) {
+            outputDir = new File(patchExtension.output, variantName);
+        } else {
+            outputDir = new File(project.getBuildDir(), "patch/" + variantName);
+        }
+        outputDir.mkdirs();
+        //获得android的混淆任务
+        final Task proguardTask = project.getTasks().findByName("transformClassesAndResourcesWithProguardFor" + capitalizeName);
+        //备份本次的mapping文件
+        final File mappingBak = new File(outputDir, "mapping.txt");
+        //如果没开启混淆，则为null，不需要备份mapping
+        if (proguardTask != null) {
+            // 在混淆后备份mapping
+            proguardTask.doLast(new Action<Task>() {
+                @Override
+                public void execute(Task task) {
+                    //混淆任务输出的所有文件
+                    TaskOutputs outputs = proguardTask.getOutputs();
+                    Set<File> files = outputs.getFiles().getFiles();
+                    for (File file : files) {
+                        //把mapping文件备份
+                        if (file.getName().endsWith("mapping.txt")) {
+                            try {
+                                FileUtils.copyFile(file, mappingBak);
+                                project.getLogger().error("备份混淆mapping文件:" + mappingBak.getCanonicalPath());
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                            break;
+                        }
                     }
                 }
-                project.getLogger().error(">>>>>>dexTask.doFirst end>>>>>>");
-            }
-        });
+            });
+        }
+        //将上次混淆的mapping应用到本次,如果没有上次的混淆文件就没操作
+        //上一次混淆的mapping文件存在并且 也开启了混淆任务
+        if (mappingBak.exists() && proguardTask != null) {
+            //将上次混淆的mapping应用到本次
+            TransformTask task = (TransformTask) proguardTask;
+            ProGuardTransform transform = (ProGuardTransform) task.getTransform();
+            transform.applyTestedMapping(mappingBak);
+        }
+
+        //在混淆后 记录类的hash值，并生成补丁包
+        final File hexFile = new File(outputDir, "hex.txt");
+        // 需要打包补丁的类的jar包
+        final File patchClassFile = new File(outputDir, "patchClass.jar");
+        // 用dx打包后的jar包
+        final File patchFile = new File(outputDir, "patch.jar");
+        //插桩 记录md5并对比
+        PatchGenerator patchGenerator = new PatchGenerator(project, patchFile, patchClassFile, hexFile);
+        //记录类的md5
+        Map<String, String> newHexs = new HashMap<>();
+
+
+        //把class打包成dex任务
+        Task dexTask = project.getTasks().findByName("transformClassesWithDexBuilderFor" + capitalizeName);
+        if (dexTask != null) {
+            //打包之前执行插桩
+            dexTask.doFirst(new Action<Task>() {
+                @Override
+                public void execute(Task task) {
+                    project.getLogger().error(">>>>>>dexTask.doFirst start>>>>>>");
+
+
+                    //打包过滤文件
+                    Set<File> files = dexTask.getInputs().getFiles().getFiles();
+                    for (File file : files) {
+                        project.getLogger().error(">>>>>>file:" + file.getAbsolutePath());
+                        //用户配置的application，实际上可以解析manifest自动获取，但是java实现太麻烦了，干脆让用户自己配置
+                        String applicationName = patchExtension.applicationName;
+                        //windows下 目录输出是  xx\xx\  ,linux下是  /xx/xx ,把 . 替换成平台相关的斜杠
+                        applicationName = applicationName.replaceAll("\\.", Matcher.quoteReplacement(File.separator));
+                        String filePath = file.getAbsolutePath();
+                        //插桩，防止类被打上标签
+                        if (filePath.endsWith(".jar")) {
+                            processJar(applicationName, file, newHexs, patchGenerator);
+                        } else if (filePath.endsWith(".class")) {
+                            processClass(applicationName, variant.getDirName(), file, newHexs, patchGenerator);
+                        }
+                    }
+                    project.getLogger().error(">>>>>>dexTask.doFirst end>>>>>>");
+
+                    //类的md5集合 写入到文件
+                    Utils.writeHex(newHexs, hexFile);
+                    try {
+                        //生成补丁
+                        patchGenerator.generate();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }
     }
 
-    private static void processJar(String applicationName, File file) {
+
+    private static void processJar(String applicationName, File file, Map<String, String> hexs, PatchGenerator patchGenerator) {
         try {
             //无论是windows还是linux jar包都是 /
             applicationName = applicationName.replaceAll(Matcher.quoteReplacement(File.separator), "/");
@@ -121,15 +203,22 @@ public class HotFixPlugin implements Plugin<Project> {
                 InputStream is = jarFile.getInputStream(jarEntry);
 
                 String className = jarEntry.getName();
-                System.out.println(">>>>>>processJar-className：" + className);
                 if (className.endsWith(".class")
                         && !className.startsWith(applicationName)
                         && !Utils.isAndroidClass(className)
                         && !className.startsWith("com/maning/hotfix")) {
                     //插桩处理
                     byte[] byteCode = ClassUtils.referHackWhenInit(is);
+                    //生成MD5值
+                    String hex = Utils.hex(byteCode);
+                    System.out.println(">>>>>>processJar-className：" + className + ",hex:" + hex);
                     is.close();
                     jarOutputStream.write(byteCode);
+
+                    //保存
+                    hexs.put(className, hex);
+                    //对比缓存的md5，不一致则放入补丁
+                    patchGenerator.checkClass(className, hex, byteCode);
                 } else {
                     //输出到临时文件
                     jarOutputStream.write(IOUtils.toByteArray(is));
@@ -145,7 +234,7 @@ public class HotFixPlugin implements Plugin<Project> {
         }
     }
 
-    private static void processClass(String applicationName, String dirName, File file) {
+    private static void processClass(String applicationName, String dirName, File file, Map<String, String> hexs, PatchGenerator patchGenerator) {
         String filePath = file.getAbsolutePath();
         //注意这里的filePath 目录结构
         String className = filePath;
@@ -166,11 +255,17 @@ public class HotFixPlugin implements Plugin<Project> {
             FileInputStream is = new FileInputStream(filePath);
             //执行插桩
             byte[] byteCode = ClassUtils.referHackWhenInit(is);
+            String hex = Utils.hex(byteCode);
             is.close();
 
             FileOutputStream os = new FileOutputStream(filePath);
             os.write(byteCode);
             os.close();
+
+            //保存
+            hexs.put(className, hex);
+            //对比缓存的md5，不一致则放入补丁
+            patchGenerator.checkClass(filePath, hex, byteCode);
         } catch (Exception e) {
             e.printStackTrace();
         }

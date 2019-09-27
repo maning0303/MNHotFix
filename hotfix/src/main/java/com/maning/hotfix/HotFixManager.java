@@ -78,11 +78,6 @@ public class HotFixManager {
             if (patchFile.exists()) {
                 dexFiels.add(patchFile);
             }
-//            //加入一个hack.dex ：插桩->防止类被打上标签
-//            File hackFile = initHack(context);
-//            if (hackFile != null && hackFile.exists()) {
-//                dexFiels.add(hackFile);
-//            }
             //参数：dex优化目录-odex保存地址
             File optimizedDirectory = context.getCacheDir();
             //参数：空集合
