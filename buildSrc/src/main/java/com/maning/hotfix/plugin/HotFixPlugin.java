@@ -5,6 +5,7 @@ import com.android.build.gradle.AppExtension;
 import com.android.build.gradle.AppPlugin;
 import com.android.build.gradle.api.ApplicationVariant;
 
+import org.apache.commons.compress.utils.IOUtils;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
@@ -15,7 +16,12 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.Enumeration;
 import java.util.Set;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.jar.JarOutputStream;
 import java.util.regex.Matcher;
 
 public class HotFixPlugin implements Plugin<Project> {
@@ -87,7 +93,7 @@ public class HotFixPlugin implements Plugin<Project> {
                     String filePath = file.getAbsolutePath();
                     //插桩，防止类被打上标签
                     if (filePath.endsWith(".jar")) {
-                        processJar(applicationName, variant.getDirName(), file);
+                        processJar(applicationName, file);
                     } else if (filePath.endsWith(".class")) {
                         processClass(applicationName, variant.getDirName(), file);
                     }
@@ -97,8 +103,46 @@ public class HotFixPlugin implements Plugin<Project> {
         });
     }
 
-    private static void processJar(String applicationName, String dirName, File file) {
+    private static void processJar(String applicationName, File file) {
+        try {
+            //无论是windows还是linux jar包都是 /
+            applicationName = applicationName.replaceAll(Matcher.quoteReplacement(File.separator), "/");
 
+            //jar包解析
+            File bakJar = new File(file.getParent(), file.getName() + ".bak");
+            JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(bakJar));
+            JarFile jarFile = new JarFile(file);
+            Enumeration<JarEntry> entries = jarFile.entries();
+
+            while (entries.hasMoreElements()) {
+                JarEntry jarEntry = entries.nextElement();
+
+                jarOutputStream.putNextEntry(new JarEntry(jarEntry.getName()));
+                InputStream is = jarFile.getInputStream(jarEntry);
+
+                String className = jarEntry.getName();
+                System.out.println(">>>>>>processJar-className：" + className);
+                if (className.endsWith(".class")
+                        && !className.startsWith(applicationName)
+                        && !Utils.isAndroidClass(className)
+                        && !className.startsWith("com/maning/hotfix")) {
+                    //插桩处理
+                    byte[] byteCode = ClassUtils.referHackWhenInit(is);
+                    is.close();
+                    jarOutputStream.write(byteCode);
+                } else {
+                    //输出到临时文件
+                    jarOutputStream.write(IOUtils.toByteArray(is));
+                }
+                jarOutputStream.closeEntry();
+            }
+            jarOutputStream.close();
+            jarFile.close();
+            file.delete();
+            bakJar.renameTo(file);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private static void processClass(String applicationName, String dirName, File file) {
@@ -111,7 +155,7 @@ public class HotFixPlugin implements Plugin<Project> {
         if (className.startsWith(dirName)) {
             className = className.split(dirName)[1].substring(1);
         }
-        System.out.println(">>>>>>className：" + className);
+        System.out.println(">>>>>>processClass-className：" + className);
         //application或者android support我们不管
         if (className.startsWith(applicationName) || Utils.isAndroidClass(className)) {
             System.out.println(">>>>>>android support 或者 Application >>>>>>> 跳过");
