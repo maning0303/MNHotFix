@@ -98,12 +98,13 @@ public class HotFixPlugin implements Plugin<Project> {
 
     private static void processClass(String applicationName, String dirName, File file) {
         String filePath = file.getAbsolutePath();
-        //注意这里的filePath包含了目录+包名+类名，所以去掉目录
-        String className;
-        if (filePath.contains("compileDebugJavaWithJavac/classes/")) {
-            className = filePath.split(dirName + "/compileDebugJavaWithJavac/classes/")[1];
-        } else {
-            className = filePath.split(dirName)[1];
+        //注意这里的filePath 目录结构
+        String className = filePath;
+        if (filePath.contains("classes")) {
+            className = className.split("classes")[1].substring(1);
+        }
+        if (className.startsWith(dirName)) {
+            className = className.split(dirName)[1].substring(1);
         }
         System.out.println(">>>>>>className：" + className);
         //application或者android support我们不管
