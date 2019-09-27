@@ -21,7 +21,7 @@ import java.util.regex.Matcher;
 public class HotFixPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
-        project.getLogger().error(">>>>>>>HotFixPlugin>>>>>>");
+        project.getLogger().error(">>>>>>HotFixPlugin>>>>>>");
 
         //插件只能在android application 下面使用
         if (!project.getPlugins().hasPlugin(AppPlugin.class)) {
@@ -40,10 +40,11 @@ public class HotFixPlugin implements Plugin<Project> {
                 if (patchExtension == null) {
                     throw new GradleException("HotFix patch{}配置不能为空");
                 }
-                project.getLogger().error(">>>>>patchExtension:" + patchExtension.toString());
+                project.getLogger().error(">>>>>>patchExtension:" + patchExtension.toString());
                 //获取android{}配置
                 AppExtension android = project.getExtensions().findByType(AppExtension.class);
                 if (android == null) {
+                    project.getLogger().error(">>>>>>AppExtension android==null>>>>>>");
                     return;
                 }
                 //getApplicationVariants就是包含了debug和release的集合，all表示对集合进行遍历
@@ -52,7 +53,7 @@ public class HotFixPlugin implements Plugin<Project> {
                     public void execute(@NotNull ApplicationVariant applicationVariant) {
                         //当前用户是debug模式
                         if (patchExtension.debugOn) {
-                            project.getLogger().error(">>>>>debug模式>>>>>over");
+                            project.getLogger().error(">>>>>>debug模式>>>>>>over");
                             return;
                         }
                         //配置热修复插件生成补丁的一系列任务
@@ -78,7 +79,7 @@ public class HotFixPlugin implements Plugin<Project> {
                 project.getLogger().error(">>>>>>dexTask.doFirst start>>>>>>");
                 Set<File> files = dexTask.getInputs().getFiles().getFiles();
                 for (File file : files) {
-                    project.getLogger().error(">>>>>file:" + file.getAbsolutePath());
+                    project.getLogger().error(">>>>>>file:" + file.getAbsolutePath());
                     //用户配置的application，实际上可以解析manifest自动获取，但是java实现太麻烦了，干脆让用户自己配置
                     String applicationName = patchExtension.applicationName;
                     //windows下 目录输出是  xx\xx\  ,linux下是  /xx/xx ,把 . 替换成平台相关的斜杠
@@ -86,7 +87,7 @@ public class HotFixPlugin implements Plugin<Project> {
                     String filePath = file.getAbsolutePath();
                     //插桩，防止类被打上标签
                     if (filePath.endsWith(".jar")) {
-
+                        processJar(applicationName, variant.getDirName(), file);
                     } else if (filePath.endsWith(".class")) {
                         processClass(applicationName, variant.getDirName(), file);
                     }
@@ -94,6 +95,10 @@ public class HotFixPlugin implements Plugin<Project> {
                 project.getLogger().error(">>>>>>dexTask.doFirst end>>>>>>");
             }
         });
+    }
+
+    private static void processJar(String applicationName, String dirName, File file) {
+
     }
 
     private static void processClass(String applicationName, String dirName, File file) {

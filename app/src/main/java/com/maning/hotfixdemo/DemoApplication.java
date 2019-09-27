@@ -20,6 +20,8 @@ public class DemoApplication extends Application {
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
+        //初始化
+        HotFixManager.init(this);
         //hotfix
         String patchPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/patch.jar";
         System.out.println(">>>>>>installPatch-patchPath:" + patchPath);

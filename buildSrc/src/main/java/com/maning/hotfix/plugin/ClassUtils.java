@@ -29,14 +29,14 @@ public class ClassUtils {
         ClassVisitor cv = new ClassVisitor(Opcodes.ASM5, cw) {
             @Override
             public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
-                System.out.println(">>>>>>visitMethod>>>>>>");
+                System.out.println(">>>>>>visitMethod>>>>>>" + name);
                 MethodVisitor methodVisitor = super.visitMethod(access, name, desc, signature, exceptions);
                 methodVisitor = new MethodVisitor(api, methodVisitor) {
                     @Override
                     public void visitInsn(int opcode) {
                         //在构造方法中插入AntilazyLoad引用
                         if (NAME_INIT.equals(name) && opcode == Opcodes.RETURN) {
-                            System.out.println(">>>>>>开始插桩>>>>>>");
+                            System.out.println(">>>>>>开始插桩>>>>>>" + name);
                             super.visitLdcInsn(Type.getType(HACK_CLASS_PATH));
                         }
                         super.visitInsn(opcode);

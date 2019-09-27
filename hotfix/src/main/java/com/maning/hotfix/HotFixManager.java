@@ -3,6 +3,7 @@ package com.maning.hotfix;
 import android.content.Context;
 import android.os.Build;
 
+import com.maning.hotfix.utils.AssetsUtils;
 import com.maning.hotfix.utils.ReflectUtils;
 
 import java.io.File;
@@ -20,6 +21,26 @@ import java.util.List;
  */
 public class HotFixManager {
 
+    public static void init(Context context) {
+        //加入一个hack.dex ：插桩->防止类被打上标签
+        File hackFile = getHackFile(context);
+        if (hackFile != null && hackFile.exists()) {
+            installPatch(context, hackFile.getAbsolutePath());
+        }
+    }
+
+    private static File getHackFile(Context context) {
+        try {
+            File hackDir = context.getDir("hack", Context.MODE_PRIVATE);
+            File hackFile = new File(hackDir, "hack.jar");
+            AssetsUtils.copyAssets(context, "hotfix_hack.jar", hackFile.getAbsolutePath());
+            return new File(hackFile.getAbsolutePath());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     /**
      * 修复
      *
@@ -29,7 +50,6 @@ public class HotFixManager {
     public static void installPatch(Context context, String patchPath) {
         //PathClassLoader
         ClassLoader classLoader = context.getClassLoader();
-
         try {
             //反射获取BaseDexClassLoad属性：DexPathList pathList
             Field pathListField = ReflectUtils.getField(classLoader, "pathList");
@@ -54,9 +74,15 @@ public class HotFixManager {
             Object[] newDexElements;
             //参数：dex路径集合
             ArrayList<File> dexFiels = new ArrayList<>();
-            dexFiels.add(new File(patchPath));
-            //加入一个hack.dex ：插桩->防止类被打上标签
-            dexFiels.add(initHackDex());
+            File patchFile = new File(patchPath);
+            if (patchFile.exists()) {
+                dexFiels.add(patchFile);
+            }
+//            //加入一个hack.dex ：插桩->防止类被打上标签
+//            File hackFile = initHack(context);
+//            if (hackFile != null && hackFile.exists()) {
+//                dexFiels.add(hackFile);
+//            }
             //参数：dex优化目录-odex保存地址
             File optimizedDirectory = context.getCacheDir();
             //参数：空集合
@@ -86,11 +112,7 @@ public class HotFixManager {
 
         } catch (Exception e) {
             e.printStackTrace();
-            System.out.println(">>>>>isntall patch exception>>>>>:" + e.toString());
+            System.out.println(">>>>>install patch exception>>>>>:" + e.toString());
         }
-    }
-
-    private static File initHackDex() {
-        return new File("");
     }
 }
