@@ -1,6 +1,5 @@
 apply plugin: 'com.android.application'
 apply plugin: com.maning.hotfix.plugin.HotFixPlugin
-
 patch{
     debugOn false
     applicationName "com.maning.hotfixdemo.DemoApplication"
