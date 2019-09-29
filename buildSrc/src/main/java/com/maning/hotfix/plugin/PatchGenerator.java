@@ -91,15 +91,21 @@ public class PatchGenerator {
             sdkDir = System.getenv("ANDROID_HOME");
         }
         //windows使用 dx.bat命令,linux/mac使用 dx命令
-        String cmdExt = Os.isFamily(Os.FAMILY_WINDOWS) ? ".bat" : "";
-        // 执行：dx --dex --output=output.jar input.jar
-        String dxPath = sdkDir + "/build-tools/" + buildToolsVersion + "/dx" + cmdExt;
-        String patch = "--output=" + patchFile.getAbsolutePath();
-        String cmd = dxPath + " --dex " + patch + " " + patchClassFile.getAbsolutePath();
-
+        String cmd;
+        if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+            // 执行：dx --dex --output=output.jar input.jar
+            String dxPath = sdkDir + "/build-tools/" + buildToolsVersion + "/dx.bat";
+            String patch = "--output=" + patchFile.getAbsolutePath();
+            cmd = dxPath + " --dex " + patch + " " + patchClassFile.getAbsolutePath();
+        } else {
+            // 执行：java -jar dx.jar --dex --output=output.jar input.jar
+            String dxPath = sdkDir + "/build-tools/" + buildToolsVersion + "/lib/dx.jar";
+            String patch = "--output=" + patchFile.getAbsolutePath();
+            cmd = "java -jar " + dxPath + " --dex " + patch + " " + patchClassFile.getAbsolutePath();
+        }
         System.out.println(cmd);
-        Process process =
-                Runtime.getRuntime().exec(cmd);
+
+        Process process = Runtime.getRuntime().exec(cmd);
         process.waitFor();
 //        patchClassFile.delete();
         //命令执行失败

@@ -56,7 +56,7 @@ public class Utils {
             String line;
             while ((line = br.readLine()) != null) {
                 String[] list = line.split(":");
-                if (list != null && list.length == 2) {
+                if (list.length == 2) {
                     hashMap.put(list[0], list[1]);
                 }
             }
