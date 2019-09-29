@@ -81,14 +81,6 @@ public class HotFixPlugin implements Plugin<Project> {
     private void configTasks(Project project, ApplicationVariant variant, PatchExtension patchExtension) {
         //debug-release
         String variantName = variant.getName();
-        //首字母大写
-        String capitalizeName = Utils.capitalize(variantName);
-
-        //任务
-        Task dexRelease = project.getTasks().findByName("transformClassesWithDexForRelease");
-        Task dexDebug = project.getTasks().findByName("transformClassesWithDexForDebug");
-        Task proguardRelease = project.getTasks().findByName("transformClassesAndResourcesWithProguardForRelease");
-        Task proguardDebug = project.getTasks().findByName("transformClassesAndResourcesWithProguardForDebug");
 
         //热修复的输出目录
         File outputDir;
@@ -99,10 +91,37 @@ public class HotFixPlugin implements Plugin<Project> {
             outputDir = new File(project.getBuildDir(), "patch/" + variantName);
         }
         outputDir.mkdirs();
+        
+        Task dexTask = null;
+        Task proguardTask = null;
+        if ("debug".equals(variantName)) {
+            dexTask = project.getTasks().findByName("transformClassesWithDexForDebug");
+            proguardTask = project.getTasks().findByName("transformClassesAndResourcesWithProguardForDebug");
+        } else if ("release".equals(variantName)) {
+            dexTask = project.getTasks().findByName("transformClassesWithDexForRelease");
+            proguardTask = project.getTasks().findByName("transformClassesAndResourcesWithProguardForRelease");
+        }
+
         //获得android的混淆任务
-        String proguardTaskName = "transformClassesAndResourcesWithProguardFor" + capitalizeName;
-        project.getLogger().error(">>>>>>proguardTaskName>>>>>>:" + proguardTaskName);
-        final Task proguardTask = project.getTasks().findByName(proguardTaskName);
+        handlerProguardTask(project, outputDir, proguardTask);
+
+        //在混淆后 记录类的hash值，并生成补丁包
+        final File hexFile = new File(outputDir, "hex.txt");
+        // 需要打包补丁的类的jar包
+        final File patchClassFile = new File(outputDir, "patchClass.jar");
+        // 用dx打包后的jar包
+        final File patchFile = new File(outputDir, "patch.jar");
+        //插桩 记录md5并对比
+        PatchGenerator patchGenerator = new PatchGenerator(project, patchFile, patchClassFile, hexFile);
+        //记录类的md5
+        Map<String, String> newHexs = new HashMap<>();
+
+
+        //把class打包成dex任务
+        handlerDexTask(project, variant, patchExtension, hexFile, patchGenerator, newHexs, dexTask);
+    }
+
+    private void handlerProguardTask(Project project, File outputDir, Task proguardTask) {
         //备份本次的mapping文件
         final File mappingBak = new File(outputDir, "mapping.txt");
         //如果没开启混淆，则为null，不需要备份mapping
@@ -128,59 +147,48 @@ public class HotFixPlugin implements Plugin<Project> {
                     }
                 }
             });
+
+            //将上次混淆的mapping应用到本次,如果没有上次的混淆文件就没操作
+            //上一次混淆的mapping文件存在并且 也开启了混淆任务
+            if (mappingBak.exists()) {
+                //将上次混淆的mapping应用到本次
+                TransformTask task = (TransformTask) proguardTask;
+                ProGuardTransform transform = (ProGuardTransform) task.getTransform();
+                transform.applyTestedMapping(mappingBak);
+            }
+
         } else {
             project.getLogger().error(">>>>>>proguardTask == null>>>>>>");
         }
-        //将上次混淆的mapping应用到本次,如果没有上次的混淆文件就没操作
-        //上一次混淆的mapping文件存在并且 也开启了混淆任务
-        if (mappingBak.exists() && proguardTask != null) {
-            //将上次混淆的mapping应用到本次
-            TransformTask task = (TransformTask) proguardTask;
-            ProGuardTransform transform = (ProGuardTransform) task.getTransform();
-            transform.applyTestedMapping(mappingBak);
-        }
+    }
 
-        //在混淆后 记录类的hash值，并生成补丁包
-        final File hexFile = new File(outputDir, "hex.txt");
-        // 需要打包补丁的类的jar包
-        final File patchClassFile = new File(outputDir, "patchClass.jar");
-        // 用dx打包后的jar包
-        final File patchFile = new File(outputDir, "patch.jar");
-        //插桩 记录md5并对比
-        PatchGenerator patchGenerator = new PatchGenerator(project, patchFile, patchClassFile, hexFile);
-        //记录类的md5
-        Map<String, String> newHexs = new HashMap<>();
+    private void handlerDexTask(Project project, ApplicationVariant variant, PatchExtension patchExtension, File hexFile, PatchGenerator patchGenerator, Map<String, String> newHexs, Task dexTask) {
+        //debug-release
+        String variantName = variant.getName();
+        String dirName = variant.getDirName();
+        //用户配置的application，实际上可以解析manifest自动获取，但是java实现太麻烦了，干脆让用户自己配置
+        final String[] applicationName = {patchExtension.applicationName};
 
-
-        //把class打包成dex任务
-        String dexTaskName = "transformClassesWithDexBuilderFor" + capitalizeName;
-        project.getLogger().error(">>>>>>dexTaskName>>>>>>:" + dexTaskName);
-        Task dexTask = project.getTasks().findByName(dexTaskName);
         if (dexTask != null) {
             //打包之前执行插桩
             dexTask.doFirst(new Action<Task>() {
                 @Override
                 public void execute(Task task) {
                     project.getLogger().error(">>>>>>dexTask.doFirst start>>>>>>");
-
-
                     //打包过滤文件
                     Set<File> files = dexTask.getInputs().getFiles().getFiles();
                     for (File file : files) {
-                        //用户配置的application，实际上可以解析manifest自动获取，但是java实现太麻烦了，干脆让用户自己配置
-                        String applicationName = patchExtension.applicationName;
                         //windows下 目录输出是  xx\xx\  ,linux下是  /xx/xx ,把 . 替换成平台相关的斜杠
-                        applicationName = applicationName.replaceAll("\\.", Matcher.quoteReplacement(File.separator));
+                        applicationName[0] = applicationName[0].replaceAll("\\.", Matcher.quoteReplacement(File.separator));
                         String filePath = file.getAbsolutePath();
                         //插桩，防止类被打上标签
                         if (filePath.endsWith(".jar")) {
-                            processJar(applicationName, file, newHexs, patchGenerator);
+                            processJar(applicationName[0], file, newHexs, patchGenerator);
                         } else if (filePath.endsWith(".class")) {
-                            processClass(applicationName, variant.getDirName(), file, newHexs, patchGenerator);
+                            processClass(applicationName[0], dirName, file, newHexs, patchGenerator);
                         }
                     }
                     project.getLogger().error(">>>>>>dexTask.doFirst end>>>>>>");
-
                     //类的md5集合 写入到文件
                     Utils.writeHex(newHexs, hexFile);
                     try {
