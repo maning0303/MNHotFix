@@ -236,7 +236,7 @@ public class HotFixPlugin implements Plugin<Project> {
                     //生成MD5值
                     String hex = Utils.hex(byteCode);
                     newHexs.put(className, hex);
-                    showLog(">>>>>>processJar-className：" + className + ",hex:" + hex);
+                    showLog(">>>>>>processJar插桩className：" + className + ",hex:" + hex);
                     is.close();
                     jarOutputStream.write(byteCode);
                     //对比缓存的md5，不一致则放入补丁
@@ -278,7 +278,7 @@ public class HotFixPlugin implements Plugin<Project> {
             //生成MD5值
             String hex = Utils.hex(byteCode);
             newHexs.put(className, hex);
-            showLog(">>>>>>processClass-className：" + className + ",hex:" + hex);
+            showLog(">>>>>>processClass插桩className：" + className + ",hex:" + hex);
             is.close();
 
             FileOutputStream os = new FileOutputStream(filePath);
