@@ -92,12 +92,10 @@ public class HotFixPlugin implements Plugin<Project> {
     private void configTasks(Project project, ApplicationVariant variant, PatchExtension patchExtension) {
         //debug-release
         String variantName = variant.getName();
+        //版本号
         int versionCode = variant.getVersionCode();
-
-//        if(!variant.getBuildType().isMinifyEnabled()){
-//            showLog("不支持不开混淆的情况");
-//            return;
-//        }
+        //是否开启混淆
+        boolean isMinifyEnabled = variant.getBuildType().isMinifyEnabled();
 
         //热修复的输出目录
         //如果没有指名输出目录，默认输出到 getProjectDir()/patch/debug(release) 下
@@ -192,7 +190,7 @@ public class HotFixPlugin implements Plugin<Project> {
                         String filePath = file.getAbsolutePath();
                         //插桩，防止类被打上标签
                         if (filePath.endsWith(".jar")) {
-//                            processJar(applicationName[0], file, newHexs, patchGenerator);
+                            processJar(applicationName[0], file, newHexs, patchGenerator);
                         } else if (filePath.endsWith(".class")) {
                             processClass(applicationName[0], dirName, file, newHexs, patchGenerator);
                         }

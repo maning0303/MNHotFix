@@ -5,10 +5,12 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.maning.hotfixdemo.utils.TestFix;
+import com.maning.testjar.TestClass;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -17,10 +19,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         requestPerm();
-    }
-
-    public void testBug(View view) {
-        TestFix.test(this);
     }
 
     public void requestPerm() {
@@ -32,4 +30,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public void testClass(View view) {
+        TestFix.test(this);
+    }
+
+    public void testJar(View view) {
+        String test = TestClass.test();
+        Toast.makeText(this, test, Toast.LENGTH_SHORT).show();
+    }
 }

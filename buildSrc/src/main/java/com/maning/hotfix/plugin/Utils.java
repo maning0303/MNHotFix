@@ -18,13 +18,14 @@ import java.util.Map;
 public class Utils {
 
     public static boolean isNoProcessClass(String filePath) {
-        return filePath.startsWith("android.")
-                || filePath.startsWith("com.android.support")
-                || filePath.startsWith("androidx")
-                || filePath.contains("/R$")
-                || filePath.endsWith("/R.class")
-                || filePath.startsWith("com/maning/hotfix/")
-                || filePath.endsWith("/BuildConfig.class");
+        return
+                filePath.startsWith("android/support")
+                        || filePath.startsWith("android")
+                        || filePath.startsWith("androidx")
+                        || filePath.contains("/R$")
+                        || filePath.endsWith("/R.class")
+                        || filePath.startsWith("com/maning/hotfix/")
+                        || filePath.endsWith("/BuildConfig.class");
     }
 
     public static boolean isEmpty(String str) {

@@ -10,8 +10,14 @@
     <Button
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="测试bug"
-        android:onClick="testBug"
+        android:text="测试Class"
+        android:onClick="testClass"
+        />
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="测试Jar"
+        android:onClick="testJar"
         />
 
 </LinearLayout>

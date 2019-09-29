@@ -10,8 +10,8 @@ import android.widget.Toast;
 public class TestFix {
 
     public static void test(Context context) {
-//        Toast.makeText(context, ">>>>>>>>>> bug >>>>>>>>>> ", Toast.LENGTH_SHORT).show();
-        Toast.makeText(context, ">>>>>>>>>> bug fix fix fix >>>>>>>>>>", Toast.LENGTH_SHORT).show();
+        Toast.makeText(context, ">>>>>>>>>> bug >>>>>>>>>> ", Toast.LENGTH_SHORT).show();
+//        Toast.makeText(context, ">>>>>>>>>> bug fix fix fix >>>>>>>>>>", Toast.LENGTH_SHORT).show();
     }
 
 }
