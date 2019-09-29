@@ -91,7 +91,8 @@ public class HotFixPlugin implements Plugin<Project> {
             outputDir = new File(project.getBuildDir(), "patch/" + variantName);
         }
         outputDir.mkdirs();
-        
+
+        //打包任务和混淆任务
         Task dexTask = null;
         Task proguardTask = null;
         if ("debug".equals(variantName)) {
@@ -163,8 +164,6 @@ public class HotFixPlugin implements Plugin<Project> {
     }
 
     private void handlerDexTask(Project project, ApplicationVariant variant, PatchExtension patchExtension, File hexFile, PatchGenerator patchGenerator, Map<String, String> newHexs, Task dexTask) {
-        //debug-release
-        String variantName = variant.getName();
         String dirName = variant.getDirName();
         //用户配置的application，实际上可以解析manifest自动获取，但是java实现太麻烦了，干脆让用户自己配置
         final String[] applicationName = {patchExtension.applicationName};
