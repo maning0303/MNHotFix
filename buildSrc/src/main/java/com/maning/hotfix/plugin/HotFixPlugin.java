@@ -32,9 +32,21 @@ import java.util.jar.JarOutputStream;
 import java.util.regex.Matcher;
 
 public class HotFixPlugin implements Plugin<Project> {
+
+    private static Project mProject;
+    private static File outputDir;
+
+    private static void showLog(String msg) {
+        if (mProject != null) {
+            mProject.getLogger().error(msg);
+        }
+    }
+
     @Override
     public void apply(Project project) {
-        project.getLogger().error(">>>>>>HotFixPlugin>>>>>>");
+        mProject = project;
+
+        showLog(">>>>>>HotFixPlugin>>>>>>");
 
         //插件只能在android application 下面使用
         if (!project.getPlugins().hasPlugin(AppPlugin.class)) {
@@ -53,11 +65,10 @@ public class HotFixPlugin implements Plugin<Project> {
                 if (patchExtension == null) {
                     throw new GradleException("HotFix patch{}配置不能为空");
                 }
-                project.getLogger().error(">>>>>>patchExtension:" + patchExtension.toString());
+                showLog(">>>>>>patchExtension:" + patchExtension.toString());
                 //获取android{}配置
                 AppExtension android = project.getExtensions().findByType(AppExtension.class);
                 if (android == null) {
-                    project.getLogger().error(">>>>>>AppExtension android==null>>>>>>");
                     return;
                 }
                 //getApplicationVariants就是包含了debug和release的集合，all表示对集合进行遍历
@@ -66,7 +77,7 @@ public class HotFixPlugin implements Plugin<Project> {
                     public void execute(@NotNull ApplicationVariant applicationVariant) {
                         //当前用户是debug模式
                         if (patchExtension.debugOn) {
-                            project.getLogger().error(">>>>>>debug模式>>>>>>over");
+                            showLog(">>>>>>debug模式>>>>>>over");
                             return;
                         }
                         //配置热修复插件生成补丁的一系列任务
@@ -81,48 +92,49 @@ public class HotFixPlugin implements Plugin<Project> {
     private void configTasks(Project project, ApplicationVariant variant, PatchExtension patchExtension) {
         //debug-release
         String variantName = variant.getName();
+        int versionCode = variant.getVersionCode();
+
+//        if(!variant.getBuildType().isMinifyEnabled()){
+//            showLog("不支持不开混淆的情况");
+//            return;
+//        }
 
         //热修复的输出目录
-        File outputDir;
-        //如果没有指名输出目录，默认输出到 build/patch/debug(release) 下
+        //如果没有指名输出目录，默认输出到 getProjectDir()/patch/debug(release) 下
         if (!Utils.isEmpty(patchExtension.output)) {
             outputDir = new File(patchExtension.output, variantName);
         } else {
-            outputDir = new File(project.getBuildDir(), "patch/" + variantName);
+            outputDir = new File(project.getProjectDir(), "patch/version" + versionCode + "/" + variantName);
         }
         outputDir.mkdirs();
+
+        //在混淆后 记录类的hash值，并生成补丁包
+        final File hexFile = new File(outputDir, "hex.txt");
+        //插桩 记录md5并对比
+        PatchGenerator patchGenerator = new PatchGenerator(project, outputDir, hexFile);
+        //记录类的md5
+        Map<String, String> newHexs = new HashMap<>();
 
         //打包任务和混淆任务
         Task dexTask = null;
         Task proguardTask = null;
         if ("debug".equals(variantName)) {
-            dexTask = project.getTasks().findByName("transformClassesWithDexForDebug");
+            dexTask = project.getTasks().findByName("transformClassesWithDexBuilderForDebug");
             proguardTask = project.getTasks().findByName("transformClassesAndResourcesWithProguardForDebug");
         } else if ("release".equals(variantName)) {
-            dexTask = project.getTasks().findByName("transformClassesWithDexForRelease");
+            dexTask = project.getTasks().findByName("transformClassesWithDexBuilderForRelease");
             proguardTask = project.getTasks().findByName("transformClassesAndResourcesWithProguardForRelease");
         }
+        showLog(">>>>>>variantName:" + variantName + ",dexTask" + dexTask + ",proguardTask:" + proguardTask);
 
         //获得android的混淆任务
-        handlerProguardTask(project, outputDir, proguardTask);
-
-        //在混淆后 记录类的hash值，并生成补丁包
-        final File hexFile = new File(outputDir, "hex.txt");
-        // 需要打包补丁的类的jar包
-        final File patchClassFile = new File(outputDir, "patchClass.jar");
-        // 用dx打包后的jar包
-        final File patchFile = new File(outputDir, "patch.jar");
-        //插桩 记录md5并对比
-        PatchGenerator patchGenerator = new PatchGenerator(project, patchFile, patchClassFile, hexFile);
-        //记录类的md5
-        Map<String, String> newHexs = new HashMap<>();
-
+        handlerProguardTask(outputDir, proguardTask);
 
         //把class打包成dex任务
-        handlerDexTask(project, variant, patchExtension, hexFile, patchGenerator, newHexs, dexTask);
+        handlerDexTask(variant, patchExtension, hexFile, patchGenerator, newHexs, dexTask);
     }
 
-    private void handlerProguardTask(Project project, File outputDir, Task proguardTask) {
+    private void handlerProguardTask(File outputDir, Task proguardTask) {
         //备份本次的mapping文件
         final File mappingBak = new File(outputDir, "mapping.txt");
         //如果没开启混淆，则为null，不需要备份mapping
@@ -139,7 +151,7 @@ public class HotFixPlugin implements Plugin<Project> {
                         if (file.getName().endsWith("mapping.txt")) {
                             try {
                                 FileUtils.copyFile(file, mappingBak);
-                                project.getLogger().error("备份混淆mapping文件:" + mappingBak.getCanonicalPath());
+                                showLog("备份混淆mapping文件:" + mappingBak.getCanonicalPath());
                             } catch (IOException e) {
                                 e.printStackTrace();
                             }
@@ -158,12 +170,10 @@ public class HotFixPlugin implements Plugin<Project> {
                 transform.applyTestedMapping(mappingBak);
             }
 
-        } else {
-            project.getLogger().error(">>>>>>proguardTask == null>>>>>>");
         }
     }
 
-    private void handlerDexTask(Project project, ApplicationVariant variant, PatchExtension patchExtension, File hexFile, PatchGenerator patchGenerator, Map<String, String> newHexs, Task dexTask) {
+    private void handlerDexTask(ApplicationVariant variant, PatchExtension patchExtension, File hexFile, PatchGenerator patchGenerator, Map<String, String> newHexs, Task dexTask) {
         String dirName = variant.getDirName();
         //用户配置的application，实际上可以解析manifest自动获取，但是java实现太麻烦了，干脆让用户自己配置
         final String[] applicationName = {patchExtension.applicationName};
@@ -173,7 +183,7 @@ public class HotFixPlugin implements Plugin<Project> {
             dexTask.doFirst(new Action<Task>() {
                 @Override
                 public void execute(Task task) {
-                    project.getLogger().error(">>>>>>dexTask.doFirst start>>>>>>");
+                    showLog(">>>>>>dexTask.doFirst start>>>>>>");
                     //打包过滤文件
                     Set<File> files = dexTask.getInputs().getFiles().getFiles();
                     for (File file : files) {
@@ -182,12 +192,12 @@ public class HotFixPlugin implements Plugin<Project> {
                         String filePath = file.getAbsolutePath();
                         //插桩，防止类被打上标签
                         if (filePath.endsWith(".jar")) {
-                            processJar(applicationName[0], file, newHexs, patchGenerator);
+//                            processJar(applicationName[0], file, newHexs, patchGenerator);
                         } else if (filePath.endsWith(".class")) {
                             processClass(applicationName[0], dirName, file, newHexs, patchGenerator);
                         }
                     }
-                    project.getLogger().error(">>>>>>dexTask.doFirst end>>>>>>");
+                    showLog(">>>>>>dexTask.doFirst end>>>>>>");
                     //类的md5集合 写入到文件
                     Utils.writeHex(newHexs, hexFile);
                     try {
@@ -198,13 +208,11 @@ public class HotFixPlugin implements Plugin<Project> {
                     }
                 }
             });
-        } else {
-            project.getLogger().error(">>>>>>dexTask == null>>>>>>");
         }
     }
 
 
-    private static void processJar(String applicationName, File file, Map<String, String> hexs, PatchGenerator patchGenerator) {
+    private static void processJar(String applicationName, File file, Map<String, String> newHexs, PatchGenerator patchGenerator) {
         try {
             //无论是windows还是linux jar包都是 /
             applicationName = applicationName.replaceAll(Matcher.quoteReplacement(File.separator), "/");
@@ -224,14 +232,13 @@ public class HotFixPlugin implements Plugin<Project> {
                 String className = jarEntry.getName();
                 if (className.endsWith(".class")
                         && !className.startsWith(applicationName)
-                        && !Utils.isAndroidClass(className)
-                        && !className.startsWith("com/maning/hotfix")) {
+                        && !Utils.isNoProcessClass(className)) {
                     //插桩处理
                     byte[] byteCode = ClassUtils.referHackWhenInit(is);
                     //生成MD5值
                     String hex = Utils.hex(byteCode);
-                    hexs.put(className, hex);
-                    System.out.println(">>>>>>processJar-className：" + className + ",hex:" + hex);
+                    newHexs.put(className, hex);
+                    showLog(">>>>>>processJar-className：" + className + ",hex:" + hex);
                     is.close();
                     jarOutputStream.write(byteCode);
                     //对比缓存的md5，不一致则放入补丁
@@ -251,7 +258,7 @@ public class HotFixPlugin implements Plugin<Project> {
         }
     }
 
-    private static void processClass(String applicationName, String dirName, File file, Map<String, String> hexs, PatchGenerator patchGenerator) {
+    private static void processClass(String applicationName, String dirName, File file, Map<String, String> newHexs, PatchGenerator patchGenerator) {
         String filePath = file.getAbsolutePath();
         //注意这里的filePath 目录结构
         String className = filePath;
@@ -262,7 +269,7 @@ public class HotFixPlugin implements Plugin<Project> {
             className = className.split(dirName)[1].substring(1);
         }
         //application或者android support我们不管
-        if (className.startsWith(applicationName) || Utils.isAndroidClass(className)) {
+        if (className.startsWith(applicationName) || Utils.isNoProcessClass(className)) {
             return;
         }
         //开始插桩-插入代码
@@ -272,8 +279,8 @@ public class HotFixPlugin implements Plugin<Project> {
             byte[] byteCode = ClassUtils.referHackWhenInit(is);
             //生成MD5值
             String hex = Utils.hex(byteCode);
-            hexs.put(filePath, hex);
-            System.out.println(">>>>>>processClass-className：" + className + ",hex:" + hex);
+            newHexs.put(className, hex);
+            showLog(">>>>>>processClass-className：" + className + ",hex:" + hex);
             is.close();
 
             FileOutputStream os = new FileOutputStream(filePath);
@@ -281,7 +288,7 @@ public class HotFixPlugin implements Plugin<Project> {
             os.close();
 
             //对比缓存的md5，不一致则放入补丁
-            patchGenerator.checkClass(filePath, hex, byteCode);
+            patchGenerator.checkClass(className, hex, byteCode);
         } catch (Exception e) {
             e.printStackTrace();
         }

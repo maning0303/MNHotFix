@@ -1,10 +1,6 @@
 package com.maning.hotfix.plugin;
 
-import com.android.build.gradle.internal.pipeline.TransformTask;
-import com.android.build.gradle.internal.transforms.ProGuardTransform;
-
 import org.apache.commons.codec.digest.DigestUtils;
-import org.gradle.api.Task;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -20,9 +16,15 @@ import java.util.Map;
  * @desc : 工具类
  */
 public class Utils {
-    
-    public static boolean isAndroidClass(String filePath) {
-        return filePath.startsWith("android") || filePath.startsWith("androidx");
+
+    public static boolean isNoProcessClass(String filePath) {
+        return filePath.startsWith("android.")
+                || filePath.startsWith("com.android.support")
+                || filePath.startsWith("androidx")
+                || filePath.contains("/R$")
+                || filePath.endsWith("/R.class")
+                || filePath.startsWith("com/maning/hotfix/")
+                || filePath.endsWith("/BuildConfig.class");
     }
 
     public static boolean isEmpty(String str) {
@@ -83,4 +85,5 @@ public class Utils {
             e.printStackTrace();
         }
     }
+
 }

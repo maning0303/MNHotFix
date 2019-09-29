@@ -15,14 +15,21 @@ android {
         versionCode 1
         versionName "1.0"
     }
+
     buildTypes {
-        debug {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
         release {
-            minifyEnabled false
+            minifyEnabled false //启用ProGuard压缩代码
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            shrinkResources false //删除无用资源，减小apk大小,会使getResources().getIdentifier失效
+            zipAlignEnabled true //zip对齐
+
+        }
+        debug {
+            minifyEnabled false //启用ProGuard压缩代码
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            shrinkResources false
+            zipAlignEnabled true //zip对齐
+            debuggable true
         }
     }
 }

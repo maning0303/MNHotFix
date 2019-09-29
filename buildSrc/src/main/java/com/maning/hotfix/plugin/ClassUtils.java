@@ -35,8 +35,9 @@ public class ClassUtils {
                     public void visitInsn(int opcode) {
                         //在构造方法中插入AntilazyLoad引用
                         if (NAME_INIT.equals(name) && opcode == Opcodes.RETURN) {
-                            System.out.println(">>>>>>开始插桩>>>>>>" + name);
+                            System.out.println(">>>>>>开始插桩>>>>>>start:" + name);
                             super.visitLdcInsn(Type.getType(HACK_CLASS_PATH));
+                            System.out.println(">>>>>>开始插桩>>>>>>end:" + name);
                         }
                         super.visitInsn(opcode);
                     }

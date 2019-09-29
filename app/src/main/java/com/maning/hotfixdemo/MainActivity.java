@@ -20,7 +20,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void testBug(View view) {
-        TestFix.test();
+        TestFix.test(this);
     }
 
     public void requestPerm() {

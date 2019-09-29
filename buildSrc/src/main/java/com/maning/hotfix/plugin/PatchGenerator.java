@@ -26,13 +26,24 @@ public class PatchGenerator {
     private Map<String, String> oldHexs;
     private JarOutputStream jarOutputStream;
 
-    public PatchGenerator(Project project, File patchFile, File patchClassFile,
-                          File hexFile) {
+    public PatchGenerator(Project project, File outputDir, File hexFile) {
         this.project = project;
         AppExtension android = project.getExtensions().getByType(AppExtension.class);
         buildToolsVersion = android.getBuildToolsVersion();
-        this.patchFile = patchFile;
-        this.patchClassFile = patchClassFile;
+        // 需要打包补丁的类的jar包
+        patchClassFile = new File(outputDir, "patchClass.jar");
+        // 用dx打包后的jar包
+        patchFile = new File(outputDir, "patch.jar");
+        try {
+            if (!this.patchFile.exists()) {
+                this.patchFile.createNewFile();
+            }
+            if (!this.patchClassFile.exists()) {
+                this.patchClassFile.createNewFile();
+            }
+        } catch (Exception e) {
+
+        }
         if (hexFile.exists()) {
             oldHexs = Utils.readHex(hexFile);
         }
@@ -54,7 +65,6 @@ public class PatchGenerator {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
         }
     }
 
@@ -107,11 +117,11 @@ public class PatchGenerator {
 
         Process process = Runtime.getRuntime().exec(cmd);
         process.waitFor();
-//        patchClassFile.delete();
         //命令执行失败
-        if (process.exitValue() != 0) {
-            throw new IOException("generate patch error:" + cmd);
+        if (process.exitValue() == 0) {
+            project.getLogger().error("patch creat success : " + patchFile);
+        } else {
+            project.getLogger().error("no patch");
         }
-        project.getLogger().error("patch generated in : " + patchFile);
     }
 }
